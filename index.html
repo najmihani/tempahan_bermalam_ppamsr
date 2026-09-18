@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Carian Unit — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">🔍 Carian Tempahan Unit</div>
+    <p class="card-body">Masukkan ID Unit untuk semak rekod tempahan penghuni.</p>
+    <div class="search-bar">
+      <input type="text" id="search-unit" placeholder="Contoh: A-6-01" onkeyup="if(event.key==='Enter')searchUnit()">
+      <button class="btn btn-primary btn-sm" onclick="searchUnit()">Cari</button>
+    </div>
+  </div>
+
+  <div id="result-container"></div>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireRole(['admin_keselamatan', 'admin_sistem'])) return;
+    initApp();
+    showEmpty('result-container', 'Cari unit untuk lihat rekod tempahan.');
+  });
+
+  function searchUnit() {
+    var unitId = document.getElementById('search-unit').value.trim().toUpperCase();
+    if (!unitId) {
+      showToast('Masukkan ID Unit.', 'warning');
+      return;
+    }
+
+    showLoading('result-container', 'Mencari...');
+
+    apiGet('searchBookingsByUnit', { token: getToken(), unitId: unitId }).then(function (res) {
+      if (res.success && res.data) {
+        renderResult(res.data, unitId);
+      } else {
+        showEmpty('result-container', 'Unit tidak dijumpai.');
+      }
+    }).catch(function () {
+      showEmpty('result-container', 'Ralat sambungan.');
+    });
+  }
+
+  function renderResult(data, searchedId) {
+    var unit = data.unit;
+    var bookings = data.bookings || [];
+
+    if (!unit) {
+      showEmpty('result-container', 'Unit ' + escapeHtml(searchedId) + ' tidak dijumpai.');
+      return;
+    }
+
+    var html = '<div class="card">' +
+      '<div class="card-title">Maklumat Unit</div>' +
+      '<div class="info-bar"><span class="info-bar-label">ID Unit</span><span class="info-bar-value">' + escapeHtml(unit.IDUnit || '') + '</span></div>' +
+      '<div class="info-bar"><span class="info-bar-label">Pemilik</span><span class="info-bar-value">' + escapeHtml(unit.NamaPemilik || '') + '</span></div>' +
+      '<div class="info-bar"><span class="info-bar-label">Status</span><span class="info-bar-value">' + escapeHtml(unit.Status || '') + '</span></div>' +
+    '</div>';
+
+    if (bookings.length === 0) {
+      html += '<div class="card"><div class="empty-state"><span class="empty-icon">📋</span><p>Unit ini tiada rekod tempahan.</p></div></div>';
+    } else {
+      html += '<div class="card"><div class="card-title">Rekod Tempahan (' + bookings.length + ')</div>';
+      var sorted = bookings.slice().sort(function (a, b) {
+        return String(b.Tarikh).localeCompare(String(a.Tarikh));
+      });
+      sorted.forEach(function (b) {
+        var statusBadge = b.Status === 'Disahkan'
+          ? '<span class="badge badge-success">Disahkan</span>'
+          : '<span class="badge badge-danger">Dibatalkan</span>';
+        html += '<div class="booking-card">' +
+          '<div class="booking-card-header">' +
+            '<span class="booking-date">' + formatDatePanjang(b.Tarikh) + '</span>' +
+            statusBadge +
+          '</div>' +
+          '<div class="booking-meta">ID: ' + escapeHtml(b.IDTempahan) + '</div>' +
+          '<div class="booking-meta">Ditempah: ' + formatTimestamp(b.Timestamp) + '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('result-container').innerHTML = html;
+  }
+</script>
+</body>
+</html>
