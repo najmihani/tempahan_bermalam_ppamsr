@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Log Masuk — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+</div>
+
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-logo">
+      <span id="login-logo-placeholder" class="login-logo-placeholder">🅿</span>
+      <div id="login-logo-img" style="display:none;">
+        <img id="login-logo-img-el" src="" alt="Logo" style="height:64px;width:auto;border-radius:8px;">
+      </div>
+    </div>
+    <h1 class="login-title" id="login-title">Sistem Tempahan Parking</h1>
+
+    <div class="role-tabs">
+      <div class="role-tab active" data-role="pengguna" onclick="selectRole('pengguna')">Penghuni</div>
+      <div class="role-tab" data-role="keselamatan" onclick="selectRole('keselamatan')">Keselamatan</div>
+      <div class="role-tab" data-role="sistem" onclick="selectRole('sistem')">Sistem</div>
+    </div>
+
+    <form id="login-form" onsubmit="return doLogin(event)">
+      <div class="input-group">
+        <label for="login-id">Login ID</label>
+        <input type="text" id="login-id" placeholder="Contoh: usr_a6_01" autocomplete="username" required>
+      </div>
+      <div class="input-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Password anda" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="login-btn">Log Masuk</button>
+    </form>
+
+    <p style="text-align:center; margin-top:16px; font-size:12px; color:var(--text-secondary);">
+      Demo: Penghuni <code>usr_a6_01</code> / <code>rumah123</code><br>
+      Keselamatan <code>admin_sec</code> / <code>safety123</code><br>
+      Sistem <code>admin_sys</code> / <code>admin123</code>
+    </p>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+  var selectedRole = 'pengguna';
+
+  // Auto-redirect jika token masih valid
+  (function autoRedirect() {
+    var token = getToken();
+    var role = getRole();
+    if (token && role) {
+      redirectByRole(role);
+    }
+  })();
+
+  function selectRole(role) {
+    selectedRole = role;
+    document.querySelectorAll('.role-tab').forEach(function (t) {
+      t.classList.remove('active');
+    });
+    document.querySelector('[data-role="' + role + '"]').classList.add('active');
+
+    // Update placeholder
+    var input = document.getElementById('login-id');
+    switch (role) {
+      case 'pengguna':
+        input.placeholder = 'Contoh: usr_a6_01';
+        break;
+      case 'keselamatan':
+        input.placeholder = 'admin_sec';
+        break;
+      case 'sistem':
+        input.placeholder = 'admin_sys';
+        break;
+    }
+    input.value = '';
+    document.getElementById('password').value = '';
+  }
+
+  function doLogin(e) {
+    e.preventDefault();
+    var loginId = document.getElementById('login-id').value.trim();
+    var password = document.getElementById('password').value;
+    var btn = document.getElementById('login-btn');
+
+    if (!loginId || !password) {
+      showToast('Sila isi Login ID dan password.', 'error');
+      return false;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Memuatkan...';
+
+    apiPost('login', { loginId: loginId, password: password }).then(function (res) {
+      btn.disabled = false;
+      btn.textContent = 'Log Masuk';
+
+      if (res.success && res.data) {
+        setToken(res.data.token);
+        setRole(res.data.role);
+        if (res.data.unitId) setUnitId(res.data.unitId);
+        if (res.data.namaPemilik) setNamaPemilik(res.data.namaPemilik);
+
+        showToast('Log masuk berjaya!', 'success');
+        setTimeout(function () {
+          redirectByRole(res.data.role);
+        }, 800);
+      } else {
+        showToast(res.error || 'Log masuk gagal.', 'error');
+      }
+    }).catch(function (err) {
+      btn.disabled = false;
+      btn.textContent = 'Log Masuk';
+      showToast('Ralat sambungan. Cuba lagi.', 'error');
+    });
+
+    return false;
+  }
+
+  // Render header
+  document.addEventListener('DOMContentLoaded', function () {
+    initApp();
+    // Update logo di login card
+    var tetapan = getTetapan();
+    if (tetapan.LogoURL) {
+      var imgEl = document.getElementById('login-logo-img-el');
+      imgEl.src = tetapan.LogoURL;
+      document.getElementById('login-logo-img').style.display = 'block';
+      document.getElementById('login-logo-placeholder').style.display = 'none';
+    }
+    document.getElementById('login-title').textContent = tetapan.NamaSistem || 'Sistem Tempahan Parking';
+  });
+</script>
+</body>
+</html>
