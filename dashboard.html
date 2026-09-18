@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Dashboard Penghuni — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Info penghuni -->
+  <div class="card">
+    <div class="card-title">Selamat datang, <span id="nama-pemilik"></span></div>
+    <div class="info-bar">
+      <span class="info-bar-label">Unit</span>
+      <span class="info-bar-value" id="unit-id"></span>
+    </div>
+    <div class="info-bar">
+      <span class="info-bar-label">Baki malam bulan ini</span>
+      <span class="info-bar-value" id="baki-malam">3 / 3</span>
+    </div>
+  </div>
+
+  <!-- Kalendar -->
+  <div class="calendar-nav">
+    <button class="calendar-nav-btn" onclick="prevMonth()">‹</button>
+    <span class="calendar-month-label" id="month-label"></span>
+    <button class="calendar-nav-btn" onclick="nextMonth()">›</button>
+  </div>
+
+  <div id="calendar-container"></div>
+
+  <!-- Tarikh dipilih -->
+  <div class="card" id="selected-card" style="display:none;">
+    <div class="card-title">Tarikh Dipilih</div>
+    <div id="selected-dates-list"></div>
+    <div class="info-bar">
+      <span class="info-bar-label">Jumlah malam</span>
+      <span class="info-bar-value" id="selected-count">0</span>
+    </div>
+    <button class="btn btn-primary mt-8" id="confirm-btn" onclick="confirmBooking()">Tempah Sekarang</button>
+    <button class="btn btn-secondary mt-8" onclick="clearSelection()">Padam Pilihan</button>
+  </div>
+
+  <a href="tempahan-saya.html" class="btn btn-outline mt-16">📋 Tempahan Saya</a>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  var calYear, calMonth;
+  var selectedDates = [];
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireAuth('pengguna')) return;
+    initApp();
+
+    var now = new Date();
+    calYear = now.getFullYear();
+    calMonth = now.getMonth();
+
+    document.getElementById('nama-pemilik').textContent = getNamaPemilik() || '';
+    document.getElementById('unit-id').textContent = getUnitId();
+
+    renderCalendar();
+  });
+
+  function renderCalendar() {
+    var unitId = getUnitId();
+    document.getElementById('calendar-container').innerHTML = generateCalendar(calYear, calMonth, unitId);
+    document.getElementById('month-label').textContent = NAMA_BULAN[calMonth] + ' ' + calYear;
+
+    var monthStr = calYear + '-' + String(calMonth + 1).padStart(2, '0');
+    var baki = getRemainingNights(unitId, monthStr);
+    var tetapan = getTetapan();
+    var max = tetapan.HadMalamSebulan || 3;
+    document.getElementById('baki-malam').textContent = baki + ' / ' + max;
+  }
+
+  function prevMonth() {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    selectedDates = [];
+    renderCalendar();
+    updateSelectedCard();
+  }
+
+  function nextMonth() {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    selectedDates = [];
+    renderCalendar();
+    updateSelectedCard();
+  }
+
+  // Override global handler
+  onCalendarDayClick = function (dateStr) {
+    var today = new Date();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    if (dateStr < todayStr) {
+      showToast('Tidak boleh tempah tarikh lepas.', 'warning');
+      return;
+    }
+
+    // Semak jika sudah ditempah
+    var unitId = getUnitId();
+    if (isDateBooked(dateStr, unitId)) {
+      showToast('Unit ini sudah tempah pada ' + formatDate(dateStr), 'warning');
+      return;
+    }
+
+    // Toggle pilihan
+    var idx = selectedDates.indexOf(dateStr);
+    if (idx > -1) {
+      selectedDates.splice(idx, 1);
+    } else {
+      var tetapan = getTetapan();
+      var max = tetapan.HadMalamSebulan || 3;
+      var monthStr = dateStr.substring(0, 7);
+      var baki = getRemainingNights(unitId, monthStr);
+      if (selectedDates.length >= baki) {
+        showToast('Anda hanya boleh tempah ' + baki + ' malam lagi bulan ini.', 'warning');
+        return;
+      }
+      selectedDates.push(dateStr);
+    }
+
+    // Update visual
+    document.querySelectorAll('.calendar-cell').forEach(function (cell) {
+      cell.classList.remove('selected');
+    });
+    selectedDates.forEach(function (d) {
+      var cell = document.querySelector('[data-date="' + d + '"]');
+      if (cell) cell.classList.add('selected');
+    });
+
+    updateSelectedCard();
+  };
+
+  function updateSelectedCard() {
+    var card = document.getElementById('selected-card');
+    if (selectedDates.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+    var sorted = selectedDates.slice().sort();
+    var html = sorted.map(function (d) {
+      return '<div class="booking-meta">' + formatDatePanjang(d) + '</div>';
+    }).join('');
+    document.getElementById('selected-dates-list').innerHTML = html;
+    document.getElementById('selected-count').textContent = selectedDates.length;
+  }
+
+  function clearSelection() {
+    selectedDates = [];
+    document.querySelectorAll('.calendar-cell').forEach(function (cell) {
+      cell.classList.remove('selected');
+    });
+    updateSelectedCard();
+  }
+
+  function confirmBooking() {
+    if (selectedDates.length === 0) {
+      showToast('Pilih tarikh dahulu.', 'warning');
+      return;
+    }
+
+    var btn = document.getElementById('confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Memproses...';
+
+    apiPost('createBooking', {
+      token: getToken(),
+      unitId: getUnitId(),
+      dates: selectedDates
+    }).then(function (res) {
+      btn.disabled = false;
+      btn.textContent = 'Tempah Sekarang';
+
+      if (res.success) {
+        showToast('Tempahan berjaya! ' + selectedDates.length + ' malam ditempah.', 'success');
+        selectedDates = [];
+        // Refresh data
+        syncFromApi();
+        setTimeout(renderCalendar, 500);
+        updateSelectedCard();
+      } else {
+        showToast(res.error || 'Tempahan gagal.', 'error');
+      }
+    }).catch(function () {
+      btn.disabled = false;
+      btn.textContent = 'Tempah Sekarang';
+      showToast('Ralat sambungan. Cuba lagi.', 'error');
+    });
+  }
+</script>
+</body>
+</html>

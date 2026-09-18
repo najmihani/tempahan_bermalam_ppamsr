@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Tempahan Saya — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">Tempahan Saya</div>
+    <div id="bookings-list"></div>
+  </div>
+  <a href="dashboard.html" class="btn btn-outline mt-16">‹ Kembali ke Dashboard</a>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireAuth('pengguna')) return;
+    initApp();
+    loadBookings();
+  });
+
+  function loadBookings() {
+    var unitId = getUnitId();
+    showLoading('bookings-list', 'Memuatkan tempahan...');
+
+    apiGet('getMyBookings', { token: getToken(), unitId: unitId }).then(function (res) {
+      if (res.success && res.data && res.data.length > 0) {
+        renderBookings(res.data);
+      } else {
+        showEmpty('bookings-list', 'Anda belum ada tempahan.');
+      }
+    }).catch(function () {
+      showEmpty('bookings-list', 'Gagal memuatkan data.');
+    });
+  }
+
+  function renderBookings(bookings) {
+    var sorted = bookings.slice().sort(function (a, b) {
+      return String(b.Tarikh).localeCompare(String(a.Tarikh));
+    });
+
+    var html = sorted.map(function (b) {
+      var statusBadge = b.Status === 'Disahkan'
+        ? '<span class="badge badge-success">Disahkan</span>'
+        : '<span class="badge badge-danger">Dibatalkan</span>';
+
+      var cancelBtn = b.Status === 'Disahkan'
+        ? '<button class="btn btn-danger btn-sm" onclick="cancelBooking(\'' + b.IDTempahan + '\')">Batalkan</button>'
+        : '';
+
+      return '<div class="booking-card">' +
+        '<div class="booking-card-header">' +
+          '<span class="booking-date">' + formatDatePanjang(b.Tarikh) + '</span>' +
+          statusBadge +
+        '</div>' +
+        '<div class="booking-meta">Ditempah: ' + formatTimestamp(b.Timestamp) + '</div>' +
+        '<div class="booking-meta">ID: ' + escapeHtml(b.IDTempahan) + '</div>' +
+        '<div class="booking-actions">' + cancelBtn + '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('bookings-list').innerHTML = html;
+  }
+
+  function cancelBooking(bookingId) {
+    if (!confirm('Adakah anda pasti mahu membatalkan tempahan ini?')) return;
+
+    apiPost('cancelBooking', { token: getToken(), bookingId: bookingId }).then(function (res) {
+      if (res.success) {
+        showToast('Tempahan dibatalkan.', 'success');
+        syncFromApi();
+        setTimeout(loadBookings, 500);
+      } else {
+        showToast(res.error || 'Gagal membatalkan.', 'error');
+      }
+    }).catch(function () {
+      showToast('Ralat sambungan.', 'error');
+    });
+  }
+</script>
+</body>
+</html>
