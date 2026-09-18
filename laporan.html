@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Laporan Bulanan — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">Laporan Bulanan</div>
+    <div class="search-bar">
+      <input type="month" id="report-month" onchange="loadReport()">
+      <button class="btn btn-primary btn-sm no-print" onclick="window.print()">🖨 Cetak</button>
+    </div>
+  </div>
+
+  <div id="report-content"></div>
+</div>
+
+<div class="bottom-nav" id="bottom-nav" data-active="laporan"></div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireAuth('admin_sistem')) return;
+    initApp();
+    var now = new Date();
+    document.getElementById('report-month').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    loadReport();
+  });
+
+  function loadReport() {
+    var month = document.getElementById('report-month').value;
+    showLoading('report-content', 'Menjana laporan...');
+
+    apiGet('getMonthlyReport', { token: getToken(), month: month }).then(function (res) {
+      if (res.success && res.data) {
+        renderReport(res.data);
+      } else {
+        showEmpty('report-content', 'Tiada data laporan.');
+      }
+    }).catch(function () {
+      showEmpty('report-content', 'Ralat sambungan.');
+    });
+  }
+
+  function renderReport(data) {
+    var html = '<div class="card">' +
+      '<div class="card-title">Ringkasan — ' + formatMonth(data.bulan) + '</div>' +
+      '<div class="info-bar"><span class="info-bar-label">Jumlah Tempahan</span><span class="info-bar-value">' + (data.jumlahTempahan || 0) + '</span></div>' +
+      '<div class="info-bar"><span class="info-bar-label">Unit Unik Tempah</span><span class="info-bar-value">' + (data.jumlahUnitUnik || 0) + '</span></div>' +
+      '<div class="info-bar"><span class="info-bar-label">Unit Aktif</span><span class="info-bar-value">' + (data.jumlahUnitAktif || 0) + '</span></div>' +
+      '<div class="info-bar"><span class="info-bar-label">Parking Digunakan</span><span class="info-bar-value">' + (data.totalParkingUsed || 0) + '</span></div>' +
+      '<div class="info-bar"><span class="info-bar-label">Parking Tersedia</span><span class="info-bar-value">' + (data.totalParkingAvailable || 0) + '</span></div>' +
+    '</div>';
+
+    if (data.bookings && data.bookings.length > 0) {
+      html += '<div class="table-wrap"><table>' +
+        '<thead><tr><th>Tarikh</th><th>Unit</th><th>Status</th><th>Ditempah</th></tr></thead><tbody>';
+      var sorted = data.bookings.slice().sort(function (a, b) {
+        return String(b.Tarikh).localeCompare(String(a.Tarikh));
+      });
+      sorted.forEach(function (b) {
+        html += '<tr>' +
+          '<td>' + formatDatePanjang(b.Tarikh) + '</td>' +
+          '<td>' + escapeHtml(b.IDUnit) + '</td>' +
+          '<td>' + (b.Status === 'Disahkan' ? '✓' : '✕') + '</td>' +
+          '<td>' + formatTimestamp(b.Timestamp) + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    } else {
+      html += '<div class="empty-state"><span class="empty-icon">📊</span><p>Tiada tempahan bulan ini.</p></div>';
+    }
+
+    document.getElementById('report-content').innerHTML = html;
+  }
+</script>
+</body>
+</html>

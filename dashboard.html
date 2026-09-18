@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Dashboard Admin — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">Dashboard</div>
+    <p class="card-body" id="welcome-text"></p>
+  </div>
+
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card"><div class="stat-value" id="stat-tempahan">—</div><div class="stat-label">Tempahan Bulan Ini</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-unit">—</div><div class="stat-label">Unit Aktif</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-parking">—</div><div class="stat-label">Parking Hari Ini</div></div>
+  </div>
+
+  <div class="card" id="quick-links">
+    <div class="card-title">Tindakan Pantas</div>
+    <div class="f-col">
+      <a href="tempahan.html" class="btn btn-primary">📋 Senarai Tempahan</a>
+      <a href="laporan.html" class="btn btn-secondary">📊 Laporan Bulanan</a>
+      <a href="quota.html" class="btn btn-secondary">🅿 Urus Quota Parking</a>
+      <a href="log.html" class="btn btn-secondary">📝 Log Aktiviti</a>
+      <a href="../keselamatan/index.html" class="btn btn-outline">🔍 Carian Unit</a>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav" id="bottom-nav" data-active="dashboard"></div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireRole(['admin_sistem', 'admin_keselamatan'])) return;
+    initApp();
+    loadStats();
+  });
+
+  function loadStats() {
+    var role = getRole();
+    document.getElementById('welcome-text').textContent =
+      role === 'admin_sistem' ? 'Anda log masuk sebagai Admin Sistem.' : 'Anda log masuk sebagai Admin Keselamatan.';
+
+    // Sembunyi link yang admin keselamatan tak boleh akses
+    if (role === 'admin_keselamatan') {
+      var links = document.getElementById('quick-links');
+      if (links) links.style.display = 'none';
+    }
+
+    apiGet('getDashboardStats', { token: getToken() }).then(function (res) {
+      if (res.success && res.data) {
+        document.getElementById('stat-tempahan').textContent = res.data.jumlahTempahanBulan || 0;
+        document.getElementById('stat-unit').textContent = res.data.jumlahUnitAktif || 0;
+        var p = res.data.parkingHariIni;
+        if (p) {
+          document.getElementById('stat-parking').textContent = (p.baki || 0) + '/' + (p.jumlah || 0);
+        }
+      }
+    }).catch(function () {
+      document.getElementById('stat-tempahan').textContent = '!';
+    });
+  }
+</script>
+</body>
+</html>

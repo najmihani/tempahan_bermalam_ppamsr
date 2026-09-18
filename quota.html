@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Urus Quota Parking — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">🅿 Urus Quota Parking</div>
+    <p class="card-body">Tetapkan jumlah slot parking untuk tarikh tertentu. Default mengikut tetapan sistem.</p>
+    <div class="f-row" style="flex-wrap:wrap; gap:8px;">
+      <input type="date" id="quota-date" style="flex:1; min-width:140px;">
+      <input type="number" id="quota-total" placeholder="Jumlah slot" style="width:100px;" min="1" max="500">
+      <button class="btn btn-primary btn-sm" onclick="addQuota()">Tambah</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Senarai Quota</div>
+    <div class="search-bar">
+      <input type="month" id="filter-month" onchange="loadQuota()">
+    </div>
+    <div id="quota-list"></div>
+  </div>
+</div>
+
+<div class="bottom-nav" id="bottom-nav" data-active="quota"></div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireAuth('admin_sistem')) return;
+    initApp();
+    var now = new Date();
+    document.getElementById('filter-month').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    loadQuota();
+  });
+
+  function loadQuota() {
+    var month = document.getElementById('filter-month').value;
+    showLoading('quota-list', 'Memuatkan...');
+
+    apiGet('getQuotaList', { token: getToken(), month: month }).then(function (res) {
+      if (res.success && res.data) {
+        renderQuota(res.data);
+      } else {
+        showEmpty('quota-list', 'Tiada quota ditetapkan.');
+      }
+    }).catch(function () {
+      showEmpty('quota-list', 'Ralat sambungan.');
+    });
+  }
+
+  function renderQuota(list) {
+    if (list.length === 0) {
+      showEmpty('quota-list', 'Tiada quota untuk bulan ini.');
+      return;
+    }
+
+    var sorted = list.slice().sort(function (a, b) {
+      return String(a.Tarikh).localeCompare(String(b.Tarikh));
+    });
+
+    var html = sorted.map(function (q) {
+      var pct = q.JumlahSlot > 0 ? Math.round((q.TelahDigunakan / q.JumlahSlot) * 100) : 0;
+      var barColor = pct >= 80 ? 'var(--danger)' : pct >= 50 ? 'var(--warning)' : 'var(--success)';
+
+      return '<div class="booking-card">' +
+        '<div class="booking-card-header">' +
+          '<span class="booking-date">' + formatDatePanjang(q.Tarikh) + '</span>' +
+          '<span class="badge badge-info">' + (q.Baki) + ' baki</span>' +
+        '</div>' +
+        '<div class="booking-meta">' + (q.TelahDigunakan || 0) + ' / ' + (q.JumlahSlot || 0) + ' digunakan (' + pct + '%)</div>' +
+        '<div style="background:var(--border); height:8px; border-radius:4px; overflow:hidden; margin-top:4px;">' +
+          '<div style="background:' + barColor + '; height:100%; width:' + pct + '%;"></div>' +
+        '</div>' +
+        '<div class="booking-actions">' +
+          '<input type="number" id="edit-' + q.Tarikh + '" value="' + (q.JumlahSlot || 0) + '" style="width:80px; min-height:36px; font-size:13px;" min="1" max="500">' +
+          '<button class="btn btn-secondary btn-sm" onclick="updateQuota(\'' + q.Tarikh + '\')">Simpan</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('quota-list').innerHTML = html;
+  }
+
+  function addQuota() {
+    var date = document.getElementById('quota-date').value;
+    var total = document.getElementById('quota-total').value;
+
+    if (!date || !total) {
+      showToast('Isi tarikh dan jumlah slot.', 'warning');
+      return;
+    }
+
+    apiPost('addQuota', { token: getToken(), date: date, total: parseInt(total) }).then(function (res) {
+      if (res.success) {
+        showToast('Quota ditambah.', 'success');
+        document.getElementById('quota-date').value = '';
+        document.getElementById('quota-total').value = '';
+        syncFromApi();
+        setTimeout(loadQuota, 500);
+      } else {
+        showToast(res.error || 'Gagal.', 'error');
+      }
+    }).catch(function () {
+      showToast('Ralat sambungan.', 'error');
+    });
+  }
+
+  function updateQuota(date) {
+    var newTotal = document.getElementById('edit-' + date).value;
+
+    apiPost('updateQuota', { token: getToken(), date: date, newTotal: parseInt(newTotal) }).then(function (res) {
+      if (res.success) {
+        showToast('Quota dikemas kini.', 'success');
+        syncFromApi();
+        setTimeout(loadQuota, 500);
+      } else {
+        showToast(res.error || 'Gagal.', 'error');
+      }
+    }).catch(function () {
+      showToast('Ralat sambungan.', 'error');
+    });
+  }
+</script>
+</body>
+</html>

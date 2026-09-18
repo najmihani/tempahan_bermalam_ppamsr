@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Log Aktiviti — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">📝 Log Aktiviti</div>
+    <div class="search-bar">
+      <input type="date" id="filter-date" onchange="loadLog()">
+      <button class="btn btn-secondary btn-sm no-print" onclick="window.print()">🖨 Cetak</button>
+    </div>
+  </div>
+  <div id="log-list"></div>
+</div>
+
+<div class="bottom-nav" id="bottom-nav" data-active="log"></div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireAuth('admin_sistem')) return;
+    initApp();
+    // Default: hari ini
+    var now = new Date();
+    var todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    document.getElementById('filter-date').value = todayStr;
+    loadLog();
+  });
+
+  function loadLog() {
+    var date = document.getElementById('filter-date').value;
+    showLoading('log-list', 'Memuatkan...');
+
+    apiGet('getLogActivity', { token: getToken(), date: date }).then(function (res) {
+      if (res.success && res.data) {
+        renderLog(res.data);
+      } else {
+        showEmpty('log-list', 'Tiada log.');
+      }
+    }).catch(function () {
+      showEmpty('log-list', 'Ralat sambungan.');
+    });
+  }
+
+  function renderLog(logs) {
+    if (logs.length === 0) {
+      showEmpty('log-list', 'Tiada aktiviti pada tarikh ini.');
+      return;
+    }
+
+    var html = logs.map(function (l) {
+      var iconMap = {
+        login: '🔑',
+        logout: '🚪',
+        tempahan_buat: '✅',
+        tempahan_batal: '❌',
+        tempahan_padam: '🗑',
+        quota_ubah: '🅿',
+        password_ubah: '🔒'
+      };
+      var icon = iconMap[l.Tindakan] || '📝';
+
+      return '<div class="booking-card">' +
+        '<div class="booking-card-header">' +
+          '<span class="booking-meta" style="font-weight:600;">' + icon + ' ' + escapeHtml(l.Tindakan) + '</span>' +
+          '<span class="booking-meta">' + formatTimestamp(l.Timestamp) + '</span>' +
+        '</div>' +
+        '<div class="booking-meta">Pengguna: ' + escapeHtml(l['ID Unit/Peranan'] || l.IDUnit || '') + '</div>' +
+        '<div class="booking-meta">' + escapeHtml(l.Butiran || '') + '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('log-list').innerHTML = html;
+  }
+</script>
+</body>
+</html>

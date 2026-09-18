@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Senarai Tempahan — Sistem Tempahan Parking</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span id="header-logo"></span>
+    <span id="header-name" class="header-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="logout()" title="Log Keluar">⏻</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">Senarai Tempahan</div>
+    <div class="search-bar">
+      <input type="month" id="filter-month" onchange="loadBookings()">
+      <button class="btn btn-primary btn-sm" onclick="loadBookings()">Tapis</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="search-unit" placeholder="Cari ID Unit..." onkeyup="if(event.key==='Enter')loadBookings()">
+    </div>
+  </div>
+
+  <div id="bookings-list"></div>
+</div>
+
+<div class="bottom-nav" id="bottom-nav" data-active="tempahan"></div>
+
+<script src="../js/data.js"></script>
+<script src="../js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!requireAuth('admin_sistem')) return;
+    initApp();
+    // Default: bulan semasa
+    var now = new Date();
+    document.getElementById('filter-month').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    loadBookings();
+  });
+
+  function loadBookings() {
+    var month = document.getElementById('filter-month').value;
+    var searchUnit = document.getElementById('search-unit').value.trim().toUpperCase();
+
+    showLoading('bookings-list', 'Memuatkan...');
+
+    apiGet('getAllBookings', { token: getToken(), month: month }).then(function (res) {
+      if (res.success && res.data) {
+        var list = res.data;
+        if (searchUnit) {
+          list = list.filter(function (b) { return String(b.IDUnit).toUpperCase().indexOf(searchUnit) > -1; });
+        }
+        renderBookings(list);
+      } else {
+        showEmpty('bookings-list', 'Tiada tempahan.');
+      }
+    }).catch(function () {
+      showEmpty('bookings-list', 'Ralat sambungan.');
+    });
+  }
+
+  function renderBookings(bookings) {
+    if (bookings.length === 0) {
+      showEmpty('bookings-list', 'Tiada tempahan untuk ditunjukkan.');
+      return;
+    }
+
+    var sorted = bookings.slice().sort(function (a, b) {
+      return String(b.Tarikh).localeCompare(String(a.Tarikh));
+    });
+
+    var html = sorted.map(function (b) {
+      var statusBadge = b.Status === 'Disahkan'
+        ? '<span class="badge badge-success">Disahkan</span>'
+        : '<span class="badge badge-danger">Dibatalkan</span>';
+
+      var deleteBtn = '<button class="btn btn-danger btn-sm" onclick="deleteBooking(\'' + b.IDTempahan + '\')">Padam</button>';
+
+      return '<div class="booking-card">' +
+        '<div class="booking-card-header">' +
+          '<span class="booking-date">' + formatDatePanjang(b.Tarikh) + '</span>' +
+          statusBadge +
+        '</div>' +
+        '<div class="booking-meta">Unit: ' + escapeHtml(b.IDUnit) + '</div>' +
+        '<div class="booking-meta">ID: ' + escapeHtml(b.IDTempahan) + '</div>' +
+        '<div class="booking-meta">Ditempah: ' + formatTimestamp(b.Timestamp) + '</div>' +
+        '<div class="booking-actions">' + deleteBtn + '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('bookings-list').innerHTML = html;
+  }
+
+  function deleteBooking(bookingId) {
+    if (!confirm('Padam rekod tempahan ini secara kekal? Tindakan ini akan direkodkan dalam log.')) return;
+
+    apiPost('deleteBooking', { token: getToken(), bookingId: bookingId }).then(function (res) {
+      if (res.success) {
+        showToast('Rekod dipadam.', 'success');
+        syncFromApi();
+        setTimeout(loadBookings, 500);
+      } else {
+        showToast(res.error || 'Gagal memadam.', 'error');
+      }
+    }).catch(function () {
+      showToast('Ralat sambungan.', 'error');
+    });
+  }
+</script>
+</body>
+</html>
