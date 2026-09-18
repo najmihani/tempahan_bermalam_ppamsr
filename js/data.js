@@ -4,7 +4,7 @@
  * CORS: text/plain untuk POST (elak preflight)
  */
 
-var API_BASE = '';
+var API_BASE = 'https://script.google.com/macros/s/AKfycbzg8aPB9vIw_qgN1xrbuNsWuWQZwJfUAFUF_vbKgi5e7O8U_QT-ZyhZDizYwWAN-x3K/exec';
 var DATA_KEY = 'parking_data_v1';
 var DATA_VERSI = '1.0.0';
 
