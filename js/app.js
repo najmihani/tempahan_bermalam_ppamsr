@@ -93,7 +93,7 @@ function requireAuth(expectedRole) {
   var token = getToken();
   var role = getRole();
   if (!token || !role) {
-    window.location.href = '../index.html';
+    window.location.href = '/index.html';
     return false;
   }
   if (expectedRole && role !== expectedRole) {
@@ -108,7 +108,7 @@ function requireRole(roles) {
   var token = getToken();
   var role = getRole();
   if (!token || !role) {
-    window.location.href = '../index.html';
+    window.location.href = '/index.html';
     return false;
   }
   if (roles && roles.indexOf(role) === -1) {
@@ -121,14 +121,14 @@ function requireRole(roles) {
 function redirectByRole(role) {
   switch (role) {
     case 'pengguna':
-      window.location.href = 'dashboard.html';
+      window.location.href = '/pengguna/dashboard.html';
       break;
     case 'admin_sistem':
     case 'admin_keselamatan':
-      window.location.href = '../admin/dashboard.html';
+      window.location.href = '/admin/dashboard.html';
       break;
     default:
-      window.location.href = '../index.html';
+      window.location.href = '/index.html';
   }
 }
 
@@ -139,10 +139,10 @@ function redirectByRole(role) {
 function logout() {
   apiPost('logout', { token: getToken() }).then(function () {
     clearToken();
-    window.location.href = '../index.html';
+    window.location.href = '/index.html';
   }).catch(function () {
     clearToken();
-    window.location.href = '../index.html';
+    window.location.href = '/index.html';
   });
 }
 
