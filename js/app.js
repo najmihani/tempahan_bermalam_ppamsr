@@ -265,8 +265,22 @@ function generateCalendar(year, month, unitId) {
     bookedDates[b.Tarikh] = true;
   });
 
-  // Quota
+  // Quota — bina peta sekali sahaja (elak baca localStorage berulang)
   var quota = getLocalData('QuotaParking');
+  var quotaMap = {};
+  quota.forEach(function (q) {
+    var qDate = q.Tarikh || q['Tarikh'];
+    if (qDate) {
+      quotaMap[qDate] = {
+        tarikh: qDate,
+        jumlah: parseInt(q.JumlahSlot || q['Jumlah Slot']) || 0,
+        digunakan: parseInt(q.TelahDigunakan || q['Telah Digunakan']) || 0,
+        baki: parseInt(q.Baki || q['Baki']) || 0
+      };
+    }
+  });
+  var tetapan = getTetapan();
+  var defaultSlot = tetapan.JumlahSlotDefault || 50;
 
   // Header hari
   var html = '<div class="calendar">';
@@ -291,7 +305,12 @@ function generateCalendar(year, month, unitId) {
     var isPast = d.dateStr < todayStr;
     var isToday = d.dateStr === todayStr;
     var isBooked = bookedDates[d.dateStr];
-    var parkingInfo = getParkingAvailability(d.dateStr);
+    var parkingInfo = quotaMap[d.dateStr] || {
+      tarikh: d.dateStr,
+      jumlah: defaultSlot,
+      digunakan: 0,
+      baki: defaultSlot
+    };
 
     if (isPast) classes += ' past';
     if (isToday) classes += ' today';
@@ -342,19 +361,24 @@ function countMonthBookings(unitId, month) {
 
 function getRemainingNights(unitId, month) {
   var tetapan = getTetapan();
-  var max = tetapan.HadMalamSebulan || 3;
-  return max - countMonthBookings(unitId, month);
+  var max = parseInt(tetapan.HadMalamSebulan) || 3;
+  var used = countMonthBookings(unitId, month);
+  var remaining = max - used;
+  return remaining < 0 ? 0 : remaining;
 }
 
 function getParkingAvailability(date) {
+  // Guna data quota dari server (disync oleh syncFromApi)
   var quota = getLocalData('QuotaParking');
   for (var i = 0; i < quota.length; i++) {
-    if (quota[i].Tarikh === date) {
+    var q = quota[i];
+    var qDate = q.Tarikh || q['Tarikh'];
+    if (qDate === date) {
       return {
         tarikh: date,
-        jumlah: parseInt(quota[i].JumlahSlot) || 0,
-        digunakan: parseInt(quota[i].TelahDigunakan) || 0,
-        baki: parseInt(quota[i].Baki) || 0
+        jumlah: parseInt(q.JumlahSlot || q['Jumlah Slot']) || 0,
+        digunakan: parseInt(q.TelahDigunakan || q['Telah Digunakan']) || 0,
+        baki: parseInt(q.Baki || q['Baki']) || 0
       };
     }
   }
