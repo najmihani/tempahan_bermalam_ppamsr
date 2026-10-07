@@ -2,11 +2,12 @@
  * data.js — Sistem Tempahan Parking Bermalam
  * Dual-layer: API fetch + localStorage fallback
  * CORS: text/plain untuk POST (elak preflight)
+ * 
+ * API_BASE ditetapkan dalam js/config.js (jangan letak di sini)
  */
 
-var API_BASE = 'https://script.google.com/macros/s/AKfycbzg8aPB9vIw_qgN1xrbuNsWuWQZwJfUAFUF_vbKgi5e7O8U_QT-ZyhZDizYwWAN-x3K/exec';
 var DATA_KEY = 'parking_data_v1';
-var DATA_VERSI = '1.0.0';
+var DATA_VERSI = '1.0.1';
 
 // =====================================================
 // KONFIGURASI API
@@ -31,9 +32,6 @@ var mockUnit = [
 ];
 
 var mockTempahan = [
-  { IDTempahan: 'T001', IDUnit: 'A-6-01', Tarikh: '2026-10-05', Status: 'Disahkan', Timestamp: '2026-10-01 08:23:01' },
-  { IDTempahan: 'T002', IDUnit: 'A-6-01', Tarikh: '2026-10-06', Status: 'Disahkan', Timestamp: '2026-10-01 08:23:01' },
-  { IDTempahan: 'T003', IDUnit: 'A-6-02', Tarikh: '2026-10-05', Status: 'Disahkan', Timestamp: '2026-10-01 09:15:00' }
 ];
 
 var mockQuota = [
@@ -213,7 +211,8 @@ function fetchWithRetry(url, options, retries) {
   return new Promise(function (resolve, reject) {
     function attempt(remaining) {
       var controller = new AbortController();
-      var timeoutId = setTimeout(function () { controller.abort(); }, 30000);
+      // Timeout 15 saat (sebelum 30s — Apps Script sepatutnya < 5s)
+      var timeoutId = setTimeout(function () { controller.abort(); }, 15000);
 
       fetch(url, Object.assign({}, options, { signal: controller.signal }))
         .then(function (res) {
@@ -223,7 +222,7 @@ function fetchWithRetry(url, options, retries) {
         .catch(function (err) {
           clearTimeout(timeoutId);
           if (remaining > 0) {
-            setTimeout(function () { attempt(remaining - 1); }, 2000);
+            setTimeout(function () { attempt(remaining - 1); }, 1500);
           } else {
             reject(err);
           }
@@ -233,23 +232,66 @@ function fetchWithRetry(url, options, retries) {
   });
 }
 
+// Ambil quota sebulan dari server (untuk kalendar)
+function apiGetQuotaMonth(month) {
+  if (!getApiBase()) return Promise.resolve({ success: true, data: getLocalData('QuotaParking') });
+  return apiGet('getQuotaListPublic', { month: month });
+}
+
+// Ambil tempahan unit dari server
+function apiGetBookings(action, params) {
+  if (!getApiBase()) return Promise.resolve(mockApiGet(action, params));
+  return apiGet(action, params);
+}
+
 // =====================================================
 // SYNC DARI API
 // =====================================================
 
 function syncFromApi() {
-  // Jika tiada API base, guna localStorage
+  // Jika tiada API base, guna localStorage (mode mock/offline)
   if (!getApiBase()) {
     initData();
     document.dispatchEvent(new CustomEvent('park:synced', { detail: { source: 'local' } }));
     return;
   }
 
-  // Sync tetapan
-  apiGet('getSettings').then(function (res) {
-    if (res.success && res.data) {
-      setLocalData('Tetapan', res.data);
-    }
+  var now = new Date();
+  var month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
+  var tasks = [];
+
+  // 1. Sync tetapan
+  tasks.push(
+    apiGet('getSettings').then(function (res) {
+      if (res.success && res.data) {
+        setLocalData('Tetapan', res.data);
+      }
+    })
+  );
+
+  // 2. Sync quota bulan semasa (untuk kalendar)
+  tasks.push(
+    apiGet('getQuotaListPublic', { month: month }).then(function (res) {
+      if (res.success && res.data) {
+        setLocalData('QuotaParking', res.data);
+      }
+    })
+  );
+
+  // 3. Sync tempahan unit (jika sudah login)
+  if (getToken() && getRole() === 'pengguna') {
+    tasks.push(
+      apiGet('getMyBookings', { token: getToken(), unitId: getUnitId() }).then(function (res) {
+        if (res.success && res.data) {
+          setLocalData('Tempahan', res.data);
+        }
+      })
+    );
+  }
+
+  // Dispatch event selepas semua selesai (atau separa)
+  Promise.all(tasks).then(function () {
     document.dispatchEvent(new CustomEvent('park:synced', { detail: { source: 'api' } }));
   }).catch(function () {
     document.dispatchEvent(new CustomEvent('park:synced', { detail: { source: 'error' } }));
