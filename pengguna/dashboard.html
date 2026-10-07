@@ -56,6 +56,7 @@
   <a href="tempahan-saya.html" class="btn btn-outline mt-16">📋 Tempahan Saya</a>
 </div>
 
+<script src="../js/config.js"></script>
 <script src="../js/data.js"></script>
 <script src="../js/app.js"></script>
 <script>
@@ -73,6 +74,14 @@
     document.getElementById('nama-pemilik').textContent = getNamaPemilik() || '';
     document.getElementById('unit-id').textContent = getUnitId();
 
+    // Render kalendar selepas sync selesai (bukan hanya sekali)
+    // — elak guna data mock/seed yang salah untuk kiraan baki
+    document.addEventListener('park:synced', function () {
+      renderCalendar();
+    });
+
+    // Render awal untuk elak skrin kosong; baki akan dikemaskini
+    // oleh listener park:synced di atas selepas data server tiba.
     renderCalendar();
   });
 
@@ -192,10 +201,11 @@
       if (res.success) {
         showToast('Tempahan berjaya! ' + selectedDates.length + ' malam ditempah.', 'success');
         selectedDates = [];
-        // Refresh data
-        syncFromApi();
-        setTimeout(renderCalendar, 500);
         updateSelectedCard();
+        // Update baki & kalendar segera (elak tunggu async sync)
+        renderCalendar();
+        // Sync dari server — listener park:synced akan render semula kalendar
+        syncFromApi();
       } else {
         showToast(res.error || 'Tempahan gagal.', 'error');
       }
